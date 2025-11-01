@@ -1,6 +1,6 @@
 import json
 import folium
-from folium.plugins import MarkerCluster
+from folium.plugins import FastMarkerCluster
 
 def load_post_offices(filename='post_offices.json'):
     """Load post office data from JSON file."""
@@ -23,21 +23,23 @@ def create_map(post_offices, output_file='post_office_map.html'):
     # Center the map on the US (approximate center)
     us_center = [39.8283, -98.5795]
 
-    # Create base map
+    # Create base map with simple, light background
     m = folium.Map(
         location=us_center,
         zoom_start=4,
-        tiles='OpenStreetMap'
+        tiles='CartoDB Positron'
     )
 
-    # Add marker cluster for better performance
-    marker_cluster = MarkerCluster(
-        name='Post Offices',
-        overlay=True,
-        control=True
-    ).add_to(m)
+    # Prepare data for FastMarkerCluster
+    callback = ('function (row) {'
+                'var icon = L.divIcon({html: \'<div style="background-color:#e74c3c;width:10px;height:10px;border-radius:50%;border:2px solid white;"></div>\'});'
+                'var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});'
+                'var popup = row[2];'
+                'marker.bindPopup(popup);'
+                'return marker;};')
 
-    # Add markers for each post office
+    # Build data array with coordinates and popup HTML for each post office
+    data = []
     for po in post_offices:
         # Build popup content
         popup_html = f"<b>{po['name']}</b><br>"
@@ -66,13 +68,10 @@ def create_map(post_offices, output_file='post_office_map.html'):
         if po.get('operator'):
             popup_html += f"Operator: {po['operator']}"
 
-        # Create marker
-        folium.Marker(
-            location=[po['lat'], po['lon']],
-            popup=folium.Popup(popup_html, max_width=300),
-            tooltip=po['name'],
-            icon=folium.Icon(color='blue', icon='envelope', prefix='fa')
-        ).add_to(marker_cluster)
+        data.append([po['lat'], po['lon'], popup_html])
+
+    # Add fast marker cluster
+    FastMarkerCluster(data, callback=callback).add_to(m)
 
     # Add layer control
     folium.LayerControl().add_to(m)
